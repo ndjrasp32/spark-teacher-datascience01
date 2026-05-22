@@ -206,6 +206,20 @@
         </div>
         <ol id="predictionList"></ol>
       </section>
+
+      <section class="ai-prompt-panel" aria-label="생성형 AI 해석 프롬프트">
+        <div class="ai-prompt-header">
+          <div>
+            <h2>GPT에 물어볼 해석 프롬프트</h2>
+            <p>
+              현재 선택한 데이터셋, 필터, 위험도 상위 지점, 모델 한계를 자동으로 묶은 문장입니다.
+              이 내용을 생성형 AI에 넣으면 데이터셋별로 다른 해석과 토론 질문을 만들 수 있습니다.
+            </p>
+          </div>
+          <button id="copyAiPrompt" type="button">프롬프트 복사</button>
+        </div>
+        <textarea id="aiPrompt" readonly></textarea>
+      </section>
     </main>
 
     <script

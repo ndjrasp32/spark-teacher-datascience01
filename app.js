@@ -127,6 +127,8 @@ const state = {
   layers: {}
 };
 
+const defaultFilters = { district: "all", time: "all", speed: "all", scenario: "base" };
+
 const fields = [
   ["accidents", "사고"],
   ["serious", "중상"],
@@ -178,13 +180,14 @@ document.getElementById("resetData").addEventListener("click", () => {
   state.data = sampleData.map((row) => ({ ...row }));
   state.source = "수업용 샘플 데이터";
   state.datasetId = "sample";
-  state.selectedId = null;
+  resetAnalysisState();
   document.getElementById("datasetSelect").value = "sample";
   document.getElementById("csvInput").value = "";
   render();
 });
 document.getElementById("downloadSample").addEventListener("click", downloadSampleCsv);
 document.getElementById("csvInput").addEventListener("change", loadCsv);
+document.getElementById("copyAiPrompt").addEventListener("click", copyAiPrompt);
 
 function districtColor(name) {
   return {
@@ -244,6 +247,7 @@ function riskScore(row, ranges, scenario = "base") {
 }
 
 function filteredData() {
+  if (!state.data.length) return [];
   const ranges = getRanges(state.data);
   return state.data
     .map((row) => ({
@@ -265,16 +269,18 @@ function filteredData() {
 }
 
 function render() {
-  const data = filteredData();
   renderDatasetGuide();
-  renderSource(data);
   renderDistrictOptions();
+  syncControls();
+  const data = filteredData();
+  renderSource(data);
   renderKpis(data);
   renderMap(data);
   renderSelected(data);
   renderCharts(data);
   renderCorrelation(data);
   renderPredictions(data);
+  renderAiPrompt(data);
 }
 
 async function loadDataset(datasetId) {
@@ -290,17 +296,21 @@ async function loadDataset(datasetId) {
   const previousDatasetId = state.datasetId;
   const previousSource = state.source;
   const previousData = state.data;
+  const previousFilters = { ...state.filters };
+  const previousSelectedId = state.selectedId;
 
   try {
+    resetAnalysisState();
     state.datasetId = datasetId;
+    state.data = [];
     state.source = `${dataset.source} 불러오는 중`;
-    state.selectedId = null;
     render();
 
     if (dataset.rows) {
       state.data = dataset.rows();
     } else {
-      const response = await fetch(dataset.url, { cache: "no-store" });
+      const url = `${dataset.url}${dataset.url.includes("?") ? "&" : "?"}t=${Date.now()}`;
+      const response = await fetch(url, { cache: "no-store" });
       if (!response.ok) throw new Error(`데이터셋을 불러오지 못했습니다: ${response.status}`);
       state.data = normalizeRows(parseCsv(await response.text()));
     }
@@ -311,10 +321,17 @@ async function loadDataset(datasetId) {
     state.datasetId = previousDatasetId;
     state.source = previousSource;
     state.data = previousData;
+    state.filters = previousFilters;
+    state.selectedId = previousSelectedId;
     document.getElementById("datasetSelect").value = previousDatasetId;
     alert(error.message);
     render();
   }
+}
+
+function resetAnalysisState() {
+  state.filters = { ...defaultFilters };
+  state.selectedId = null;
 }
 
 function renderSource(data) {
@@ -344,9 +361,17 @@ function renderDatasetGuide() {
 function renderDistrictOptions() {
   const select = document.getElementById("districtFilter");
   const districts = ["all", ...Array.from(new Set(state.data.map((row) => row.district))).sort()];
-  const current = select.value || "all";
+  const current = state.filters.district || "all";
   select.innerHTML = districts.map((name) => `<option value="${escapeAttr(name)}">${name === "all" ? "전체" : escapeHtml(name)}</option>`).join("");
-  select.value = districts.includes(current) ? current : "all";
+  state.filters.district = districts.includes(current) ? current : "all";
+  select.value = state.filters.district;
+}
+
+function syncControls() {
+  document.getElementById("datasetSelect").value = state.datasetId;
+  document.getElementById("timeFilter").value = state.filters.time;
+  document.getElementById("speedFilter").value = state.filters.speed;
+  document.getElementById("scenarioSelect").value = state.filters.scenario;
 }
 
 function renderKpis(data) {
@@ -390,6 +415,8 @@ function renderMap(data) {
   if (mappable.length) {
     const bounds = L.latLngBounds(mappable.map((row) => [row.lat, row.lng]));
     map.fitBounds(bounds.pad(0.18), { animate: false });
+  } else {
+    map.setView([36.35, 127.39], 12, { animate: false });
   }
   setTimeout(() => map.invalidateSize(), 0);
 }
@@ -567,6 +594,88 @@ function renderPredictions(data) {
   }).join("");
 }
 
+function renderAiPrompt(data) {
+  document.getElementById("aiPrompt").value = buildAiPrompt(data);
+}
+
+function buildAiPrompt(data) {
+  const dataset = currentDatasetInfo();
+  const topRows = data.slice().sort((a, b) => b.risk - a.risk).slice(0, 5);
+  const districtRows = groupByDistrict(data).sort((a, b) => b.risk - a.risk);
+  const topText = topRows.length
+    ? topRows.map((row, index) => `${index + 1}. ${row.area}(${row.district}): 위험도 ${row.risk}점, 사고 ${row.accidents}건, 중상 ${row.serious}명, 야간 ${Math.round(row.night * 100)}%, 출퇴근 ${Math.round(row.commute * 100)}%, 해석=${row.note} ${featureInterpretation(row)}`).join("\n")
+    : "현재 필터 조건에 해당하는 지점이 없습니다.";
+  const districtText = districtRows.length
+    ? districtRows.map((row) => `${row.district}: 사고 ${row.accidents}건, 평균 위험도 ${row.risk}점`).join("; ")
+    : "집계할 지점이 없습니다.";
+
+  return [
+    "다음은 고등학교 데이터과학 수업용 교통사고 위험 분석 결과입니다. 결과를 과장하지 말고, 데이터 출처와 한계를 함께 설명해 주세요.",
+    "",
+    `데이터셋: ${dataset.label}`,
+    `출처/상태: ${state.source}`,
+    `데이터 설명: ${dataset.guide}`,
+    `현재 필터: 구/군=${filterLabel("district", state.filters.district)}, 시간 관점=${filterLabel("time", state.filters.time)}, 속도 제한=${filterLabel("speed", state.filters.speed)}, 시나리오=${filterLabel("scenario", state.filters.scenario)}`,
+    `표시 지점 수: ${data.length}개`,
+    "",
+    "데이터셋별 해석 주의점:",
+    dataset.interpretation.map((item) => `- ${item}`).join("\n"),
+    "",
+    "위험도 모델 요약:",
+    "- 사고 건수, 중상 이상, 사상자, 어린이/고령자, 야간 비중, 출퇴근 비중, 제한속도, 교통량, 기상 취약도를 정규화/가중합해 0~100점으로 비교합니다.",
+    "- 이 점수는 실제 정책 결정을 자동화하는 모델이 아니라 수업에서 변수의 영향과 분석 관점을 토론하기 위한 비교 지표입니다.",
+    "",
+    "지역별 요약:",
+    districtText,
+    "",
+    "위험도 상위 지점:",
+    topText,
+    "",
+    "요청:",
+    "1. 이 데이터셋에서 가장 눈에 띄는 패턴 3가지를 설명해 주세요.",
+    "2. 상위 위험 지점의 공통 원인을 사고 규모, 보호대상, 시간대, 도로환경 관점으로 나누어 해석해 주세요.",
+    "3. 현재 시나리오가 결과에 어떤 영향을 주는지 설명해 주세요.",
+    "4. 학생들이 추가로 확인해야 할 데이터 품질 문제와 한계를 정리해 주세요.",
+    "5. 수업 토론 질문 3개를 만들어 주세요."
+  ].join("\n");
+}
+
+function currentDatasetInfo() {
+  return builtInDatasets[state.datasetId] || {
+    label: "내가 추가한 CSV",
+    guide: "직접 추가한 CSV입니다. 필수 컬럼, 좌표 범위, 비율 값이 올바른지 확인한 뒤 결과를 해석합니다.",
+    interpretation: [
+      "업로드 데이터는 출처와 집계 기준을 먼저 확인해야 합니다.",
+      "같은 모델이라도 컬럼 값의 정의가 다르면 위험도 순위가 달라질 수 있습니다."
+    ]
+  };
+}
+
+function filterLabel(type, value) {
+  const labels = {
+    district: { all: "전체" },
+    time: { all: "전체", night: "야간 사고 비중", commute: "출퇴근 시간 비중", children: "어린이/스쿨존", elderly: "고령 보행자" },
+    speed: { all: "전체", 30: "30km/h 이하", 50: "50km/h 이하", 60: "60km/h 이상" },
+    scenario: { base: "현재 조건", school: "스쿨존 관리 강화", night: "야간 단속/조명 개선", speed: "제한속도 하향" }
+  };
+  return labels[type][value] || value;
+}
+
+async function copyAiPrompt() {
+  const prompt = document.getElementById("aiPrompt").value;
+  const button = document.getElementById("copyAiPrompt");
+  try {
+    await navigator.clipboard.writeText(prompt);
+    button.textContent = "복사됨";
+    setTimeout(() => {
+      button.textContent = "프롬프트 복사";
+    }, 1400);
+  } catch {
+    document.getElementById("aiPrompt").select();
+    button.textContent = "직접 복사";
+  }
+}
+
 function loadCsv(event) {
   const file = event.target.files[0];
   if (!file) return;
@@ -577,7 +686,7 @@ function loadCsv(event) {
       state.data = normalizeRows(rows);
       state.source = file.name;
       state.datasetId = "custom";
-      state.selectedId = null;
+      resetAnalysisState();
       document.getElementById("datasetSelect").value = "custom";
       render();
     } catch (error) {
@@ -626,7 +735,7 @@ function normalizeRows(rows) {
   const missing = required.filter((key) => !(key in rows[0]));
   if (missing.length) throw new Error(`CSV 필수 컬럼이 없습니다: ${missing.join(", ")}`);
 
-  return rows.map((row, index) => ({
+  const normalized = rows.map((row, index) => ({
     id: row.id || `CSV-${String(index + 1).padStart(3, "0")}`,
     district: row.district,
     area: row.area,
@@ -648,6 +757,11 @@ function normalizeRows(rows) {
     trafficVolume: toRatio(row.trafficVolume),
     note: row.note || "업로드한 공공데이터 지점입니다."
   })).filter(hasValidDaejeonCoordinate);
+
+  if (!normalized.length) {
+    throw new Error("대전 범위 안의 유효한 위도/경도 행이 없습니다. lat/lng 컬럼이 WGS84 좌표인지 확인하세요.");
+  }
+  return normalized;
 }
 
 function toNumber(value) {
