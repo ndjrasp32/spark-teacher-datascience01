@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>대전 교통사고 위험지역 분석 학습 프로그램</title>
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIINfQnyYnZ0JkkiCkQqiiZz0F0nZBfSENc="
+      crossorigin=""
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">Data Science Public Data Lab</p>
+        <h1>대전 교통사고 위험지역 분석/예측</h1>
+        <p class="subtitle">
+          공공데이터 기반 사고다발지역을 지도, 통계, 상관관계, 예측 모델로 살펴보는 고등학교 데이터과학 수업용 프로그램
+        </p>
+      </div>
+      <div class="source-card">
+        <span class="source-label">현재 데이터</span>
+        <strong id="sourceName">수업용 샘플 데이터</strong>
+        <span id="recordCount">0개 지점</span>
+      </div>
+    </header>
+
+    <main class="app-shell">
+      <section class="control-band" aria-label="분석 조건">
+        <label>
+          구/군
+          <select id="districtFilter"></select>
+        </label>
+        <label>
+          시간 관점
+          <select id="timeFilter">
+            <option value="all">전체</option>
+            <option value="night">야간 사고 비중</option>
+            <option value="commute">출퇴근 시간 비중</option>
+            <option value="children">어린이/스쿨존</option>
+            <option value="elderly">고령 보행자</option>
+          </select>
+        </label>
+        <label>
+          속도 제한
+          <select id="speedFilter">
+            <option value="all">전체</option>
+            <option value="30">30km/h 이하</option>
+            <option value="50">50km/h 이하</option>
+            <option value="60">60km/h 이상</option>
+          </select>
+        </label>
+        <label>
+          예측 시나리오
+          <select id="scenarioSelect">
+            <option value="base">현재 조건</option>
+            <option value="school">스쿨존 관리 강화</option>
+            <option value="night">야간 단속/조명 개선</option>
+            <option value="speed">제한속도 하향</option>
+          </select>
+        </label>
+        <div class="file-actions">
+          <label class="file-button">
+            CSV 불러오기
+            <input id="csvInput" type="file" accept=".csv,text/csv" />
+          </label>
+          <button id="downloadSample" type="button">샘플 CSV</button>
+          <button id="resetData" type="button">초기화</button>
+        </div>
+      </section>
+
+      <section class="kpi-grid" aria-label="핵심 지표">
+        <article>
+          <span>평균 위험도</span>
+          <strong id="kpiRisk">0</strong>
+        </article>
+        <article>
+          <span>총 사고 건수</span>
+          <strong id="kpiAccidents">0</strong>
+        </article>
+        <article>
+          <span>중상 이상</span>
+          <strong id="kpiSerious">0</strong>
+        </article>
+        <article>
+          <span>고위험 지점</span>
+          <strong id="kpiHotspots">0</strong>
+        </article>
+      </section>
+
+      <section class="map-analysis">
+        <div class="map-wrap">
+          <div id="map" role="application" aria-label="대전 교통사고 위험 지도"></div>
+          <div class="legend" aria-label="위험도 범례">
+            <span><i class="risk-low"></i>낮음</span>
+            <span><i class="risk-mid"></i>주의</span>
+            <span><i class="risk-high"></i>높음</span>
+          </div>
+        </div>
+        <aside class="detail-panel">
+          <div class="panel-header">
+            <span>선택 지점</span>
+            <strong id="selectedTitle">지도에서 지점을 선택하세요</strong>
+          </div>
+          <dl id="selectedStats"></dl>
+          <p id="selectedInsight">
+            원형 마커는 위험 예측 점수, 붉은 밀도는 사고 집중도를 뜻합니다. 지점을 누르면 사고 특성과 해석이 표시됩니다.
+          </p>
+        </aside>
+      </section>
+
+      <section class="visual-grid">
+        <article class="chart-panel">
+          <h2>지역별 사고/위험도</h2>
+          <canvas id="districtChart"></canvas>
+        </article>
+        <article class="chart-panel">
+          <h2>시간대별 위험 패턴</h2>
+          <canvas id="timeChart"></canvas>
+        </article>
+        <article class="chart-panel">
+          <h2>속도 제한과 사고 규모</h2>
+          <canvas id="speedChart"></canvas>
+        </article>
+        <article class="chart-panel">
+          <h2>상관관계 히트맵</h2>
+          <div id="correlationGrid" class="corr-grid" aria-label="상관관계 히트맵"></div>
+        </article>
+      </section>
+
+      <section class="learning-grid">
+        <article>
+          <h2>왜 이 분석을 하는가</h2>
+          <p>
+            교통사고 자료는 위치, 시간, 도로 환경, 인명 피해가 함께 들어 있는 대표적인 공공데이터입니다.
+            학생들은 같은 데이터를 지도와 통계로 다르게 보면서 “어디가 위험한가”보다 한 단계 더 나아가
+            “왜 위험하게 보이는가”와 “정책을 바꾸면 위험도가 어떻게 달라질 수 있는가”를 탐구할 수 있습니다.
+          </p>
+        </article>
+        <article>
+          <h2>활용 방법</h2>
+          <p>
+            수업에서는 먼저 샘플 데이터로 전체 흐름을 익히고, 이후 공공데이터포털 또는 TAAS에서 내려받은
+            대전 지역 사고다발지 CSV를 같은 컬럼 구조로 맞춰 업로드합니다. 결과는 통학로 점검, 제한속도 구간 비교,
+            야간 조명 개선 후보지 선정 같은 토론 자료로 사용할 수 있습니다.
+          </p>
+        </article>
+        <article>
+          <h2>데이터 출처와 한계</h2>
+          <p>
+            기본 자료는 수업 시연용으로 만든 대전 샘플 데이터입니다. 실제 분석에서는 한국도로교통공단
+            교통사고 GIS정보, 어린이·보행자·노인 사고다발지역 API, TAAS GIS 조회 결과를 내려받아 좌표와
+            집계 기준을 확인해야 합니다. 공개 API는 인증키가 필요한 경우가 많아 CSV 업로드 방식을 우선 지원합니다.
+          </p>
+        </article>
+        <article>
+          <h2>데이터과학 요소</h2>
+          <ul>
+            <li>데이터 수집: 공공데이터포털, TAAS GIS 자료, 지역 행정구역 정보</li>
+            <li>전처리: 결측치 확인, 수치형 변환, 구/동 단위 집계, 좌표 검증</li>
+            <li>탐색 분석: 분포, 막대그래프, 산점도, 상관관계 히트맵</li>
+            <li>공간 분석: 지도 마커, 밀도 히트맵, 행정구역별 비교</li>
+          </ul>
+        </article>
+        <article>
+          <h2>알고리즘</h2>
+          <ul>
+            <li>정규화: 서로 단위가 다른 변수들을 0~1 범위로 맞춥니다.</li>
+            <li>가중 위험 점수: 사고 건수, 중상 비율, 야간/출퇴근 비중, 속도 제한 등을 합산합니다.</li>
+            <li>시나리오 예측: 조건 변화에 따른 위험 점수 변화를 비교합니다.</li>
+            <li>상관계수: 두 변수가 함께 커지거나 작아지는 경향을 수치로 확인합니다.</li>
+          </ul>
+        </article>
+      </section>
+
+      <section class="prediction-panel">
+        <div>
+          <h2>예측 결과 해설</h2>
+          <p id="scenarioSummary"></p>
+        </div>
+        <ol id="predictionList"></ol>
+      </section>
+    </main>
+
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""
+    ></script>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>
