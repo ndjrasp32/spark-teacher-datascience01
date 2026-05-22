@@ -123,7 +123,7 @@ h2 {
 
 .control-band {
   display: grid;
-  grid-template-columns: repeat(4, minmax(145px, 1fr)) auto;
+  grid-template-columns: repeat(5, minmax(145px, 1fr)) auto;
   gap: 12px;
   align-items: end;
   padding: 14px;
@@ -155,6 +155,58 @@ select {
   gap: 8px;
   justify-content: flex-end;
   flex-wrap: wrap;
+}
+
+.dataset-guide {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.8fr) minmax(320px, 1.2fr);
+  gap: 18px;
+  align-items: start;
+  margin-top: 18px;
+  padding: 18px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.dataset-guide p {
+  margin: 0;
+  color: #47514f;
+  line-height: 1.65;
+}
+
+.required-columns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.column-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 5px 8px;
+  border: 1px solid #cbd4cf;
+  border-radius: 6px;
+  background: #f7faf8;
+  color: #33403c;
+}
+
+.column-chip strong {
+  font-size: 0.82rem;
+}
+
+.column-chip small {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.column-chip.is-required {
+  border-color: rgba(31, 122, 92, 0.32);
+  background: rgba(31, 122, 92, 0.08);
 }
 
 .file-button input {
@@ -414,6 +466,7 @@ dd {
 
 @media (max-width: 1180px) {
   .control-band,
+  .dataset-guide,
   .learning-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -442,6 +495,7 @@ dd {
   }
 
   .control-band,
+  .dataset-guide,
   .kpi-grid,
   .visual-grid,
   .learning-grid {

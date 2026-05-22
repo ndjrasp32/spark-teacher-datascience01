@@ -30,6 +30,40 @@ const sampleData = [
   { id: "DJ-025", district: "대덕구", area: "법동 초등학교 주변", lat: 36.3677, lng: 127.427, accidents: 12, casualties: 15, serious: 2, children: 4, elderly: 2, night: 0.15, commute: 0.56, pm: 1, weatherRisk: 0.18, speedLimit: 30, schoolZone: 1, roadType: "스쿨존", signalDensity: 0.45, trafficVolume: 0.41, note: "건수 중심 순위와 보호대상 중심 순위가 달라지는 예시입니다." }
 ];
 
+const requiredColumns = [
+  ["id", "선택", "지점 ID. 없으면 자동 생성"],
+  ["district", "필수", "구/군 이름"],
+  ["area", "필수", "지점 또는 사고다발지역 이름"],
+  ["lat", "필수", "위도"],
+  ["lng", "필수", "경도"],
+  ["accidents", "필수", "사고 건수"],
+  ["casualties", "필수", "사상자 수"],
+  ["serious", "필수", "중상 이상 인원"],
+  ["children", "필수", "어린이 사고 또는 관련 건수"],
+  ["elderly", "필수", "고령자 사고 또는 관련 건수"],
+  ["night", "필수", "야간 비중. 0.35 또는 35% 모두 가능"],
+  ["commute", "필수", "출퇴근/등하교 시간 비중"],
+  ["pm", "필수", "개인형 이동장치 관련 건수"],
+  ["weatherRisk", "필수", "기상 취약도. 0~1 또는 %"],
+  ["speedLimit", "필수", "제한속도 km/h"],
+  ["schoolZone", "필수", "스쿨존 여부. 1 또는 0"],
+  ["roadType", "필수", "도로 유형"],
+  ["signalDensity", "필수", "신호/교차로 밀도. 0~1 또는 %"],
+  ["trafficVolume", "필수", "교통량 지표. 0~1 또는 %"],
+  ["note", "선택", "수업 해설 문장"]
+];
+
+const builtInDatasets = {
+  sample: {
+    source: "수업용 샘플 데이터",
+    rows: () => sampleData.map((row) => ({ ...row }))
+  },
+  koroad2024: {
+    source: "KOROAD 2024 대전 사고다발지역 가공 CSV",
+    url: "./data/daejeon_traffic_risk_koroad_2024_upload.csv"
+  }
+};
+
 const districtBounds = {
   type: "FeatureCollection",
   features: [
@@ -44,6 +78,7 @@ const districtBounds = {
 const state = {
   data: sampleData.map((row) => ({ ...row })),
   source: "수업용 샘플 데이터",
+  datasetId: "sample",
   filters: { district: "all", time: "all", speed: "all", scenario: "base" },
   selectedId: null,
   charts: {},
@@ -74,6 +109,9 @@ L.geoJSON(districtBounds, {
   })
 }).addTo(map);
 
+document.getElementById("datasetSelect").addEventListener("change", (event) => {
+  loadDataset(event.target.value);
+});
 document.getElementById("districtFilter").addEventListener("change", (event) => {
   state.filters.district = event.target.value;
   render();
@@ -93,7 +131,9 @@ document.getElementById("scenarioSelect").addEventListener("change", (event) => 
 document.getElementById("resetData").addEventListener("click", () => {
   state.data = sampleData.map((row) => ({ ...row }));
   state.source = "수업용 샘플 데이터";
+  state.datasetId = "sample";
   state.selectedId = null;
+  document.getElementById("datasetSelect").value = "sample";
   document.getElementById("csvInput").value = "";
   render();
 });
@@ -180,6 +220,7 @@ function filteredData() {
 
 function render() {
   const data = filteredData();
+  renderDatasetGuide();
   renderSource(data);
   renderDistrictOptions();
   renderKpis(data);
@@ -190,9 +231,59 @@ function render() {
   renderPredictions(data);
 }
 
+async function loadDataset(datasetId) {
+  if (datasetId === "custom") {
+    document.getElementById("csvInput").click();
+    document.getElementById("datasetSelect").value = state.datasetId;
+    return;
+  }
+
+  const dataset = builtInDatasets[datasetId];
+  if (!dataset) return;
+
+  const previousDatasetId = state.datasetId;
+  const previousSource = state.source;
+  const previousData = state.data;
+
+  try {
+    state.datasetId = datasetId;
+    state.source = `${dataset.source} 불러오는 중`;
+    state.selectedId = null;
+    render();
+
+    if (dataset.rows) {
+      state.data = dataset.rows();
+    } else {
+      const response = await fetch(dataset.url, { cache: "no-store" });
+      if (!response.ok) throw new Error(`데이터셋을 불러오지 못했습니다: ${response.status}`);
+      state.data = normalizeRows(parseCsv(await response.text()));
+    }
+
+    state.source = dataset.source;
+    render();
+  } catch (error) {
+    state.datasetId = previousDatasetId;
+    state.source = previousSource;
+    state.data = previousData;
+    document.getElementById("datasetSelect").value = previousDatasetId;
+    alert(error.message);
+    render();
+  }
+}
+
 function renderSource(data) {
   document.getElementById("sourceName").textContent = state.source;
   document.getElementById("recordCount").textContent = `${data.length}개 지점 표시`;
+}
+
+function renderDatasetGuide() {
+  document.getElementById("datasetSelect").value = state.datasetId;
+  document.getElementById("requiredColumns").innerHTML = requiredColumns.map(([name, type, description]) => `
+    <span class="column-chip ${type === "필수" ? "is-required" : ""}" title="${escapeAttr(description)}">
+      <strong>${escapeHtml(name)}</strong>
+      <small>${escapeHtml(type)}</small>
+    </span>
+  `).join("");
 }
 
 function renderDistrictOptions() {
@@ -404,7 +495,9 @@ function loadCsv(event) {
       const rows = parseCsv(String(reader.result));
       state.data = normalizeRows(rows);
       state.source = file.name;
+      state.datasetId = "custom";
       state.selectedId = null;
+      document.getElementById("datasetSelect").value = "custom";
       render();
     } catch (error) {
       alert(error.message);
@@ -448,7 +541,7 @@ function parseCsv(text) {
 }
 
 function normalizeRows(rows) {
-  const required = ["district", "area", "lat", "lng", "accidents", "casualties", "serious", "children", "elderly", "night", "commute", "pm", "weatherRisk", "speedLimit", "schoolZone", "roadType", "signalDensity", "trafficVolume"];
+  const required = requiredColumns.filter(([, type]) => type === "필수").map(([name]) => name);
   const missing = required.filter((key) => !(key in rows[0]));
   if (missing.length) throw new Error(`CSV 필수 컬럼이 없습니다: ${missing.join(", ")}`);
 

@@ -31,6 +31,14 @@
     <main class="app-shell">
       <section class="control-band" aria-label="분석 조건">
         <label>
+          데이터셋
+          <select id="datasetSelect">
+            <option value="sample">수업용 샘플 데이터</option>
+            <option value="koroad2024">KOROAD 2024 대전 사고다발지역</option>
+            <option value="custom">내가 추가한 CSV</option>
+          </select>
+        </label>
+        <label>
           구/군
           <select id="districtFilter"></select>
         </label>
@@ -64,12 +72,23 @@
         </label>
         <div class="file-actions">
           <label class="file-button">
-            CSV 불러오기
+            내 CSV 추가
             <input id="csvInput" type="file" accept=".csv,text/csv" />
           </label>
           <button id="downloadSample" type="button">샘플 CSV</button>
           <button id="resetData" type="button">초기화</button>
         </div>
+      </section>
+
+      <section class="dataset-guide" aria-label="데이터셋 추가 안내">
+        <div>
+          <h2>데이터셋 선택/추가</h2>
+          <p>
+            수업에서는 기본 샘플로 흐름을 익힌 뒤, KOROAD 2024 가공 데이터나 직접 만든 CSV를 선택해 같은 지도와 예측 모델로 비교합니다.
+            CSV를 추가할 때는 아래 필수 컬럼명을 그대로 맞추면 됩니다.
+          </p>
+        </div>
+        <div class="required-columns" id="requiredColumns"></div>
       </section>
 
       <section class="kpi-grid" aria-label="핵심 지표">
