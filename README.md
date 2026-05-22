@@ -36,10 +36,15 @@ gh repo create <account>/<repo> --public --source=. --remote=origin --push
 ## 수업 흐름
 
 1. 샘플 데이터로 대전 전체 위험 분포를 지도에서 확인합니다.
-2. 구/군, 시간 관점, 속도 제한 필터를 바꾸며 사고 패턴을 비교합니다.
+2. KOROAD 전체 사고다발지역, 보행자, 노인 보행자, 어린이보호구역 데이터셋을 바꾸며 같은 모델의 결과가 어떻게 달라지는지 비교합니다.
 3. 지역별 사고/위험도, 시간대별 패턴, 속도 제한과 사고 규모를 차트로 해석합니다.
 4. 상관관계 히트맵으로 `사고`, `중상`, `야간`, `출퇴근`, `속도`, `교통량` 사이의 관계를 토론합니다.
 5. 예측 시나리오를 바꿔 스쿨존 관리, 야간 단속/조명, 제한속도 하향의 효과를 비교합니다.
+
+## 수업/프로젝트 노트
+
+- [레포 설명 노트](docs/REPOSITORY_GUIDE_KO.md): 파일 구조, 데이터셋, 전처리, 위험도 모델, 지도 데이터 확인 방법을 설명합니다.
+- [바이브코딩 데이터과학 노트](docs/VIBE_CODING_DATA_SCIENCE_NOTE_KO.md): 사용자의 요청과 AI의 제안을 순서대로 정리해 학생들이 데이터과학 프로젝트를 만들어 가는 방법을 학습할 수 있게 했습니다.
 
 ## 데이터 구조
 
@@ -60,6 +65,19 @@ id,note
 비율 컬럼인 `night`, `commute`, `weatherRisk`, `signalDensity`, `trafficVolume`은 `0.35` 또는 `35`처럼 입력할 수 있습니다. `35`는 자동으로 35%로 처리됩니다.
 
 ## 사용할 수 있는 공공데이터 후보
+
+앱에 바로 선택할 수 있게 들어간 전처리 CSV:
+
+- `data/daejeon_traffic_risk_koroad_2024_upload.csv`: KOROAD 2024 지자체별 교통사고 다발지역
+- `data/daejeon_traffic_risk_pedestrian_2022_2024_upload.csv`: KOROAD 2022-2024 보행자 사고다발지역
+- `data/daejeon_traffic_risk_oldman_2024_upload.csv`: KOROAD 2024 노인 보행자 사고다발지역
+- `data/daejeon_traffic_risk_schoolzone_child_2024_upload.csv`: KOROAD 2024 어린이보호구역 어린이 사고다발지역
+
+전처리 스크립트:
+
+```bash
+python3 tools/preprocess_koroad_datasets.py
+```
 
 - 공공데이터포털: 한국도로교통공단 교통사고 GIS정보  
   https://www.data.go.kr/data/15075668/fileData.do

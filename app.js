@@ -55,12 +55,54 @@ const requiredColumns = [
 
 const builtInDatasets = {
   sample: {
+    label: "수업용 샘플 데이터",
     source: "수업용 샘플 데이터",
+    guide: "수업 설명을 위해 구/군, 시간대, 보호대상, 도로환경 변수가 고르게 보이도록 만든 예제입니다.",
+    interpretation: [
+      "모델 흐름을 익히는 용도라 실제 민원·정책 판단에는 사용하지 않습니다.",
+      "지역별로 위험 요인이 다르게 보이도록 구성했기 때문에 필터와 시나리오 결과 차이를 설명하기 좋습니다."
+    ],
     rows: () => sampleData.map((row) => ({ ...row }))
   },
   koroad2024: {
+    label: "KOROAD 2024 사고다발지역",
     source: "KOROAD 2024 대전 사고다발지역 가공 CSV",
+    guide: "지자체별 교통사고 다발지역 원자료의 사고 건수, 사상자, 중상자, 좌표를 직접 사용한 실제 공공데이터 기반 자료입니다.",
+    interpretation: [
+      "사고 규모가 큰 교차로와 역세권이 상위권에 나타나므로 전체 교통량과 중상 피해를 같이 해석합니다.",
+      "어린이·고령자·야간·PM 변수 일부는 구별 통계와 위치 키워드에서 파생한 수업용 설명 변수입니다."
+    ],
     url: "./data/daejeon_traffic_risk_koroad_2024_upload.csv"
+  },
+  pedestrian2022_2024: {
+    label: "KOROAD 보행자 사고다발지역",
+    source: "KOROAD 2022-2024 대전 보행자 사고다발지역 가공 CSV",
+    guide: "보행자 사고다발지역 원자료를 앱 컬럼 구조에 맞춘 자료입니다. 차량 전체 사고보다 보행자 피해 집중 지점을 보는 수업에 적합합니다.",
+    interpretation: [
+      "위험도는 사고 건수보다 중상 피해, 횡단 동선, 역·시장·상업지 보행량을 중심으로 읽어야 합니다.",
+      "동일 지점이라도 전체 사고다발지역 자료와 순위가 달라질 수 있는데, 이것이 분석 목적에 따른 데이터셋 선택의 핵심입니다."
+    ],
+    url: "./data/daejeon_traffic_risk_pedestrian_2022_2024_upload.csv"
+  },
+  oldman2024: {
+    label: "KOROAD 노인 보행자 사고다발지역",
+    source: "KOROAD 2024 대전 노인 보행자 사고다발지역 가공 CSV",
+    guide: "고령 보행자 사고다발지역 원자료를 전처리한 자료입니다. 보호대상 중심 분석과 생활권 보행안전 토론에 맞춥니다.",
+    interpretation: [
+      "사고 건수는 적어 보여도 elderly 변수가 크게 들어가므로 보호대상 관점의 위험도가 높게 나옵니다.",
+      "시장, 역, 교차로 주변에서는 보행 속도, 대기시간, 우회거리 같은 해석을 함께 붙이는 것이 좋습니다."
+    ],
+    url: "./data/daejeon_traffic_risk_oldman_2024_upload.csv"
+  },
+  schoolzoneChild2024: {
+    label: "KOROAD 어린이보호구역 사고다발지역",
+    source: "KOROAD 2024 대전 어린이보호구역 어린이 사고다발지역 가공 CSV",
+    guide: "어린이보호구역 내 어린이 사고다발지역을 전처리한 자료입니다. 사고 건수보다 노출 대상과 등하교 시간대 해석이 중요합니다.",
+    interpretation: [
+      "전체 사고 건수가 작아도 children, schoolZone, commute 값이 강하게 반영되어 관리 우선순위가 올라갑니다.",
+      "스쿨존 관리 강화 시나리오에서 위험도가 내려가는 폭을 보며 정책 변수의 의미를 토론할 수 있습니다."
+    ],
+    url: "./data/daejeon_traffic_risk_schoolzone_child_2024_upload.csv"
   }
 };
 
@@ -100,14 +142,18 @@ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
   attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
 }).addTo(map);
 
-L.geoJSON(districtBounds, {
-  style: (feature) => ({
-    color: districtColor(feature.properties.name),
-    weight: 2,
-    fillColor: districtColor(feature.properties.name),
-    fillOpacity: 0.07
-  })
-}).addTo(map);
+const showApproxDistrictBounds = false;
+if (showApproxDistrictBounds) {
+  L.geoJSON(districtBounds, {
+    style: (feature) => ({
+      color: districtColor(feature.properties.name),
+      weight: 1,
+      dashArray: "4 4",
+      fillColor: districtColor(feature.properties.name),
+      fillOpacity: 0.04
+    })
+  }).addTo(map);
+}
 
 document.getElementById("datasetSelect").addEventListener("change", (event) => {
   loadDataset(event.target.value);
@@ -277,7 +323,16 @@ function renderSource(data) {
 }
 
 function renderDatasetGuide() {
+  const dataset = builtInDatasets[state.datasetId] || {
+    guide: "직접 추가한 CSV입니다. 필수 컬럼, 좌표 범위, 비율 값이 올바른지 확인한 뒤 결과를 해석합니다.",
+    interpretation: [
+      "업로드 데이터는 출처와 집계 기준을 먼저 확인해야 합니다.",
+      "같은 모델이라도 컬럼 값의 정의가 다르면 위험도 순위가 달라질 수 있습니다."
+    ]
+  };
   document.getElementById("datasetSelect").value = state.datasetId;
+  document.getElementById("datasetGuideText").textContent = dataset.guide;
+  document.getElementById("datasetInterpretation").innerHTML = dataset.interpretation.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
   document.getElementById("requiredColumns").innerHTML = requiredColumns.map(([name, type, description]) => `
     <span class="column-chip ${type === "필수" ? "is-required" : ""}" title="${escapeAttr(description)}">
       <strong>${escapeHtml(name)}</strong>
@@ -307,8 +362,9 @@ function renderMap(data) {
   if (state.layers.markers) state.layers.markers.remove();
   if (state.layers.heat) state.layers.heat.remove();
 
+  const mappable = data.filter(hasValidDaejeonCoordinate);
   const markerLayer = L.layerGroup();
-  data.forEach((row) => {
+  mappable.forEach((row) => {
     const marker = L.circleMarker([row.lat, row.lng], {
       radius: 7 + row.risk / 10,
       color: "#ffffff",
@@ -323,18 +379,28 @@ function renderMap(data) {
     });
     marker.addTo(markerLayer);
   });
-  const heatPoints = data.map((row) => [row.lat, row.lng, Math.max(0.2, row.risk / 100)]);
+  const heatPoints = mappable.map((row) => [row.lat, row.lng, Math.max(0.2, row.risk / 100)]);
   const heatLayer = L.heatLayer(heatPoints, { radius: 32, blur: 24, maxZoom: 15, minOpacity: 0.28 });
-  heatLayer.addTo(map);
+  if (heatPoints.length) heatLayer.addTo(map);
   markerLayer.addTo(map);
 
   state.layers.markers = markerLayer;
   state.layers.heat = heatLayer;
 
-  if (data.length) {
-    const bounds = L.latLngBounds(data.map((row) => [row.lat, row.lng]));
+  if (mappable.length) {
+    const bounds = L.latLngBounds(mappable.map((row) => [row.lat, row.lng]));
     map.fitBounds(bounds.pad(0.18), { animate: false });
   }
+  setTimeout(() => map.invalidateSize(), 0);
+}
+
+function hasValidDaejeonCoordinate(row) {
+  return Number.isFinite(row.lat) &&
+    Number.isFinite(row.lng) &&
+    row.lat >= 36.25 &&
+    row.lat <= 36.5 &&
+    row.lng >= 127.25 &&
+    row.lng <= 127.5;
 }
 
 function renderSelected(data) {
@@ -353,16 +419,29 @@ function renderSelected(data) {
     <div><dt>제한속도</dt><dd>${row.speedLimit}km/h</dd></div>
     <div><dt>야간 비중</dt><dd>${Math.round(row.night * 100)}%</dd></div>
     <div><dt>출퇴근 비중</dt><dd>${Math.round(row.commute * 100)}%</dd></div>
+    <div><dt>어린이/스쿨존</dt><dd>${row.children}건 · ${row.schoolZone ? "해당" : "비해당"}</dd></div>
+    <div><dt>고령/PM</dt><dd>${row.elderly}건 · ${row.pm}건</dd></div>
   `;
   const delta = row.risk - row.baseRisk;
   const changeText = delta === 0 ? "현재 조건 기준" : `${delta > 0 ? "+" : ""}${delta}점 변화`;
-  document.getElementById("selectedInsight").textContent = `${row.note} 예측 모델은 이 지점을 ${riskLabel(row.risk)}으로 분류합니다. 시나리오 적용 결과는 ${changeText}입니다.`;
+  document.getElementById("selectedInsight").textContent = `${row.note} ${featureInterpretation(row)} 예측 모델은 이 지점을 ${riskLabel(row.risk)}으로 분류합니다. 시나리오 적용 결과는 ${changeText}입니다.`;
 }
 
 function riskLabel(score) {
   if (score >= 74) return "고위험";
   if (score >= 55) return "주의";
   return "관찰";
+}
+
+function featureInterpretation(row) {
+  const reasons = [];
+  if (row.serious >= Math.max(4, row.accidents * 0.18)) reasons.push("중상 피해 비중이 높아 단순 사고 건수보다 피해 심각도를 먼저 봅니다");
+  if (row.children >= 2 || row.schoolZone) reasons.push("어린이 보호와 등하교 시간 관리가 핵심 변수입니다");
+  if (row.elderly >= 4) reasons.push("고령 보행자 관점에서는 보행시간, 횡단거리, 대기공간을 확인해야 합니다");
+  if (row.night >= 0.4) reasons.push("야간 비중이 높아 조명과 시인성 개선 후보로 볼 수 있습니다");
+  if (row.trafficVolume >= 0.75) reasons.push("교통량 지표가 높아 차량 흐름과 보행 동선의 충돌 가능성이 큽니다");
+  if (!reasons.length) reasons.push("특정 변수 하나보다 여러 요인이 함께 누적된 지점으로 해석합니다");
+  return `항목별 해석: ${reasons.slice(0, 3).join("; ")}.`;
 }
 
 function groupByDistrict(data) {
@@ -468,13 +547,15 @@ function correlation(xs, ys) {
 
 function renderPredictions(data) {
   const top = data.slice().sort((a, b) => b.risk - a.risk).slice(0, 5);
+  const dataset = builtInDatasets[state.datasetId];
   const scenarioText = {
     base: "현재 조건에서는 사고 규모, 중상 피해, 보행 취약 집단, 시간대 요인이 함께 높은 지점이 우선 관리 후보로 나타납니다.",
     school: "스쿨존 관리 강화 시나리오는 어린이 사고와 등하교 시간 비중이 큰 지점의 위험도를 낮추는 효과를 비교합니다.",
     night: "야간 단속/조명 개선 시나리오는 밤 시간 사고 비중과 기상 취약성이 큰 지점의 변화를 확인합니다.",
     speed: "제한속도 하향 시나리오는 50~60km/h 구간의 위험 점수가 얼마나 낮아지는지 비교합니다."
   }[state.filters.scenario];
-  document.getElementById("scenarioSummary").textContent = scenarioText;
+  const datasetText = dataset ? dataset.interpretation[0] : "업로드 데이터의 컬럼 정의와 집계 기준을 확인하면서 결과를 해석합니다.";
+  document.getElementById("scenarioSummary").textContent = `${datasetText} ${scenarioText}`;
   if (!top.length) {
     document.getElementById("predictionList").innerHTML = "<li>현재 필터 조건에 해당하는 지점이 없습니다.</li>";
     return;
@@ -482,7 +563,7 @@ function renderPredictions(data) {
   document.getElementById("predictionList").innerHTML = top.map((row) => {
     const delta = row.risk - row.baseRisk;
     const deltaText = delta === 0 ? "변화 없음" : `${delta > 0 ? "+" : ""}${delta}점`;
-    return `<li><strong>${row.risk}점</strong> ${escapeHtml(row.area)} (${escapeHtml(row.district)}) · ${riskLabel(row.risk)} · 시나리오 변화 ${deltaText}<br><span>${escapeHtml(row.note)}</span></li>`;
+    return `<li><strong>${row.risk}점</strong> ${escapeHtml(row.area)} (${escapeHtml(row.district)}) · ${riskLabel(row.risk)} · 시나리오 변화 ${deltaText}<br><span>${escapeHtml(row.note)} ${escapeHtml(featureInterpretation(row))}</span></li>`;
   }).join("");
 }
 
@@ -566,7 +647,7 @@ function normalizeRows(rows) {
     signalDensity: toRatio(row.signalDensity),
     trafficVolume: toRatio(row.trafficVolume),
     note: row.note || "업로드한 공공데이터 지점입니다."
-  })).filter((row) => Number.isFinite(row.lat) && Number.isFinite(row.lng));
+  })).filter(hasValidDaejeonCoordinate);
 }
 
 function toNumber(value) {

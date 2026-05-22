@@ -176,6 +176,17 @@ select {
   line-height: 1.65;
 }
 
+.dataset-interpretation {
+  margin: 12px 0 0;
+  padding-left: 18px;
+  color: #47514f;
+  line-height: 1.55;
+}
+
+.dataset-interpretation li + li {
+  margin-top: 5px;
+}
+
 .required-columns {
   display: flex;
   flex-wrap: wrap;
